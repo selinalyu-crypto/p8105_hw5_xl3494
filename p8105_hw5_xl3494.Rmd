@@ -112,6 +112,7 @@ power_plot =
 
 power_plot
 ```
+
 The plot shows the relationship between the true mean (μ) and the power of the one-sample t-test. When μ = 0, the power is about 0.05, matching the significance level (α = 0.05) because the null hypothesis is true and should rarely be rejected. As μ increases, the power rises sharply. As true mean increases, the power approaches 1, indicating the test almost always rejects the null when the true mean is far from zero.
 
 A plot showing the average estimate of μ vs. true μ
@@ -137,11 +138,88 @@ avg_mu =
 
 avg_mu
 ```
+
 The "All Samples" line shows that the one-sample t-test provides an unbiased estimator — on average, the sample mean equals the true μ. However, the "Rejected only" line sit above the purple line, especially when true μ is small, showing that when we only look at simulations where the null hypothesis was rejected, the average μ̂ is larger than the true μ .This happens because significant results tend to occur when random sampling error pushes the estimated mean farther from zero. As true μ, the bias decreases because nearly all tests reject the null, and selection plays a smaller role.
 
 
+## Problem 3
+
+Import and describe the raw data
+```{r}
+hom_raw = readr::read_csv("https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv")
+```
+
+There are 52179 homicide records in this dataset. Each row is an unique homicide case with uid, reported date, victim info (first name, race, age, and sex), homicide location (city and state, latitude/longitude), and case disposition.
+
+Summarize within cities to obtain the total number of homicides and the number of unsolved homicides
+```{r}
+city_sum =
+  hom_raw |>
+  mutate(city_state = str_c(city,",", state),
+         unsolved = disposition %in% c("Closed without arrest", "Open/No arrest")) |>
+  group_by(city_state) |>
+  summarize(
+    total = n(),
+    unsolved_n = sum(unsolved)
+  )
+
+city_sum
+```
+
+For the city of Baltimore, MD, estimate the proportion of homicides that are unsolved
+
+```{r}
+balt = 
+  city_sum |> 
+  filter(city_state == "Baltimore,MD")
+
+balt_test = 
+  prop.test(x = balt$unsolved_n, n = balt$total)
+
+balt_tidy = 
+  tidy(balt_test) |>
+  select(estimate, conf.low, conf.high)
+
+balt_tidy
+```
+
+The estimated portion of unsolved homicides in Baltimore, MD is 0.646 (95% CI: 0.628 - 0.663).
+
+Now run prop.test for each of the cities in your dataset, and extract both the proportion of unsolved homicides and the confidence interval for each.
+
+```{r}
+city_ci =
+  city_sum |>
+  mutate(tst = map2(unsolved_n, total, ~ prop.test(.x, .y)),
+         tidy = map(tst, tidy)) |>
+  unnest(tidy) |>
+  select(city_state, estimate, conf.low, conf.high) |>
+  arrange(estimate) |>
+  mutate(city_state = factor(city_state, levels = city_state))
+
+city_ci
+```
+
+Create a plot that shows the estimates and CIs for each city
+
+```{r}
+city_plot = 
+  city_ci |>
+  ggplot(aes(x = city_state, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.4) +
+  labs(
+    x = "City",
+    y = "Estimated Portion Unresolved",
+    title = "Unsolved homicide proportion by city"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+city_plot
+```
 
 
+ 
 
 
 
